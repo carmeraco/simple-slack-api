@@ -1,23 +1,27 @@
 package com.ullink.slack.simpleslackapi.impl;
 
+import com.ullink.slack.simpleslackapi.SlackChannel;
+import com.ullink.slack.simpleslackapi.SlackSession;
+import com.ullink.slack.simpleslackapi.SlackUser;
+import com.ullink.slack.simpleslackapi.events.EventType;
+import com.ullink.slack.simpleslackapi.events.SlackChannelArchived;
+import com.ullink.slack.simpleslackapi.events.SlackChannelCreated;
+import com.ullink.slack.simpleslackapi.events.SlackChannelDeleted;
+import com.ullink.slack.simpleslackapi.events.SlackChannelRenamed;
+import com.ullink.slack.simpleslackapi.events.SlackChannelUnarchived;
+import com.ullink.slack.simpleslackapi.events.SlackEvent;
+import com.ullink.slack.simpleslackapi.events.SlackGroupJoined;
+
+import org.json.simple.JSONObject;
+
 import java.util.HashMap;
 import java.util.Map;
 
-import com.ullink.slack.simpleslackapi.events.*;
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
-import com.ullink.slack.simpleslackapi.SlackChannel;
-import com.ullink.slack.simpleslackapi.SlackFile;
-import com.ullink.slack.simpleslackapi.SlackSession;
-import com.ullink.slack.simpleslackapi.SlackUser;
-
 class SlackJSONMessageParser
 {
-    
-
     public static enum SlackMessageSubType
     {
-        CHANNEL_JOIN("channel_join"), MESSAGE_CHANGED("message_changed"), MESSAGE_DELETED("message_deleted"), OTHER("-"), FILE_SHARE("file_share");
+        CHANNEL_JOIN("channel_join"), MESSAGE_CHANGED("message_changed"), MESSAGE_DELETED("message_deleted"), BOT_MESSAGE("bot_message"), OTHER("-");
 
         private static final Map<String, SlackMessageSubType> CODE_MAP = new HashMap<>();
 
@@ -52,13 +56,16 @@ class SlackJSONMessageParser
         }
     }
 
-    static SlackEvent decode(SlackSession slackSession, JSONObject obj) {
+    static SlackEvent decode(SlackSession slackSession, JSONObject obj)
+    {
         String type = (String) obj.get("type");
-        if (type == null) {
-            return SlackEvent.UNKNOWN_EVENT;
+        if (type == null)
+        {
+            return parseSlackReply(obj);
         }
         EventType eventType = EventType.getByCode(type);
-        switch (eventType) {
+        switch (eventType)
+        {
             case MESSAGE:
                 return extractMessageEvent(slackSession, obj);
             case CHANNEL_CREATED:
@@ -73,22 +80,11 @@ class SlackJSONMessageParser
                 return extractChannelUnarchiveEvent(slackSession, obj);
             case GROUP_JOINED:
                 return extractGroupJoinedEvent(slackSession, obj);
-            case REACTION_ADDED:
-                return extractReactionAddedEvent(slackSession, obj);
-            case REACTION_REMOVED:
-                return extractReactionRemovedEvent(slackSession, obj);
-            case USER_CHANGE:
-                return extractUserChangeEvent(slackSession, obj);
-            case PIN_ADDED:
-                return extractPinAddedEvent(slackSession, obj);
-            case PIN_REMOVED:
-                return extractPinRemovedEvent(slackSession, obj);
             default:
                 return SlackEvent.UNKNOWN_EVENT;
         }
     }
-    
-    
+
     private static SlackGroupJoined extractGroupJoinedEvent(SlackSession slackSession, JSONObject obj)
     {
         JSONObject channelJSONObject = (JSONObject) obj.get("channel");
@@ -145,11 +141,23 @@ class SlackJSONMessageParser
                 return parseMessageUpdated(obj, channel, ts);
             case MESSAGE_DELETED:
                 return parseMessageDeleted(obj, channel, ts);
-            case FILE_SHARE:
-                return parseMessagePublishedWithFile(obj, channel, ts, slackSession);
+            case BOT_MESSAGE:
+                return parseBotMessage(obj, channel, ts, slackSession);
             default:
                 return parseMessagePublished(obj, channel, ts, slackSession);
         }
+    }
+
+    private static SlackEvent parseSlackReply(JSONObject obj)
+    {
+        // This blew up on max at one point.. I don't know how to repro.  This  might work.
+        if (obj == null)
+            return new SlackReplyImpl(false, -1,""+(System.currentTimeMillis()/1000.0));
+
+        Boolean ok = (Boolean) obj.get("ok");
+        Long replyTo = (Long) obj.get("reply_to");
+        String timestamp = (String) obj.get("ts");
+        return new SlackReplyImpl(ok, replyTo != null ? replyTo : -1, timestamp);
     }
 
     private static SlackChannel getChannel(SlackSession slackSession, String channelId)
@@ -184,185 +192,29 @@ class SlackJSONMessageParser
         return new SlackMessageDeletedImpl(channel, deletedTs, ts);
     }
 
-    private static SlackMessagePostedImpl parseMessagePublished(JSONObject obj, SlackChannel channel, String ts, SlackSession slackSession) {
-        String text = (String) obj.get("text");
-        String userId = (String) obj.get("user");
-        if (userId == null) {
-            userId = (String) obj.get("bot_id");
-        }
-        String subtype = (String) obj.get("subtype");
-        SlackUser user = slackSession.findUserById(userId);
-        Map<String, Integer> reacs = extractReactionsFromMessageJSON(obj);
-        SlackMessagePostedImpl message = new SlackMessagePostedImpl(text, null, user, channel, ts, null, obj, SlackMessagePosted.MessageSubType.fromCode(subtype));
-        message.setReactions(reacs);
-        return message;
-    }
-
-    private final static String COMMENT_PLACEHOLDER = "> and commented:";
-    
-
-     private static void parseSlackFileFromRaw(JSONObject rawFile, SlackFile file) {
-        file.setId((String) rawFile.get("id"));
-        file.setName((String) rawFile.get("name"));
-        file.setTitle((String) rawFile.get("title"));
-        file.setMimetype((String) rawFile.get("mimetype"));
-        file.setFiletype((String) rawFile.get("filetype"));
-        file.setUrl((String) rawFile.get("url"));
-        file.setUrlDownload((String) rawFile.get("url_download"));
-        file.setUrlPrivate((String) rawFile.get("url_private"));
-        file.setUrlPrivateDownload((String) rawFile.get("url_private_download"));
-        file.setThumb64((String) rawFile.get("thumb_64"));
-        file.setThumb80((String) rawFile.get("thumb_80"));
-        file.setThumb160((String) rawFile.get("thumb_160"));
-        file.setThumb360((String) rawFile.get("thumb_360"));
-        file.setThumb480((String) rawFile.get("thumb_480"));
-        file.setThumb720((String) rawFile.get("thumb_720"));
-        try{
-            file.setOriginalH((Long) rawFile.get("original_h"));
-            file.setOriginalW((Long) rawFile.get("original_w"));
-            file.setImageExifRotation((Long) rawFile.get("image_exif_rotation"));
-        } catch(Exception e){
-            //this properties will be null if something goes wrong
-        }
-        file.setPermalink((String) rawFile.get("permalink"));
-        file.setPermalinkPublic((String) rawFile.get("permalink_public"));
-    }
-  
-    private static SlackMessagePostedImpl parseMessagePublishedWithFile(JSONObject obj, SlackChannel channel, String ts, SlackSession slackSession)
+    private static SlackMessagePostedImpl parseBotMessage(JSONObject obj, SlackChannel channel, String ts, SlackSession slackSession)
     {
-        SlackFile file = new SlackFile();
-        if (obj.get("file")!=null){
-            JSONObject rawFile = (JSONObject) obj.get("file");
-	    parseSlackFileFromRaw(rawFile, file);
-        }
-        
         String text = (String) obj.get("text");
-        String subtype = (String) obj.get("subtype");
-
-        String comment = null;
-        
-        int idx = text.indexOf(COMMENT_PLACEHOLDER);
-        
-        if (idx != -1) {
-            comment = text.substring(idx + COMMENT_PLACEHOLDER.length());
-        }
-        file.setComment(comment);
-        
-        String userId = (String) obj.get("user");
-        
-        SlackUser user = slackSession.findUserById(userId);
-        
-        return new SlackMessagePostedImpl(text, user, user, channel, ts,file,obj, SlackMessagePosted.MessageSubType.fromCode(subtype));
+        String botId = (String) obj.get("bot_id");
+        SlackUser user = slackSession.findUserById(botId);
+        return new SlackMessagePostedImpl(text, user, user, channel, ts);
     }
 
-    private static SlackChannel parseChannelDescription(JSONObject channelJSONObject) {
+    private static SlackMessagePostedImpl parseMessagePublished(JSONObject obj, SlackChannel channel, String ts, SlackSession slackSession)
+    {
+        String text = (String) obj.get("text");
+        String userId = (String) obj.get("user");
+        SlackUser user = slackSession.findUserById(userId);
+        return new SlackMessagePostedImpl(text, user, user, channel, ts);
+    }
+
+    private static SlackChannel parseChannelDescription(JSONObject channelJSONObject)
+    {
         String id = (String) channelJSONObject.get("id");
         String name = (String) channelJSONObject.get("name");
-        String topic = (String)((Map)channelJSONObject.get("topic")).get("value");
-        String purpose = (String) ((Map) channelJSONObject.get("purpose")).get("value");
-        return new SlackChannelImpl(id, name, topic, purpose, id.startsWith("D"));
+        String topic = null; // TODO
+        String purpose = null; // TODO
+        return new SlackChannelImpl(id, name, topic, purpose, true);
     }
 
-
-    private static ReactionAdded extractReactionAddedEvent(SlackSession slackSession, JSONObject obj) {
-        JSONObject item = (JSONObject) obj.get("item");
-        String emojiName = (String) obj.get("reaction");
-        String messageId = (String) item.get("ts");	
-        String fileId = (String) item.get("file");
-        String fileCommentId = (String) item.get("file_comment");
-        String channelId = (String) item.get("channel");
-        SlackChannel channel = (channelId != null) ? slackSession.findChannelById(channelId) : null;
-        SlackUser user = slackSession.findUserById((String) obj.get("user"));
-        return new ReactionAddedImpl(emojiName, user, channel, messageId, fileId, fileCommentId);
-    }
-
-    private static SlackUserChange extractUserChangeEvent(SlackSession slackSession, JSONObject obj) {
-        JSONObject user = (JSONObject) obj.get("user");
-        SlackUser slackUser = SlackJSONParsingUtils.buildSlackUser(user);
-        return new SlackUserChangeImpl(slackUser);
-    }
-
-    private static ReactionRemoved extractReactionRemovedEvent(SlackSession slackSession, JSONObject obj) {
-        JSONObject item = (JSONObject) obj.get("item");
-        String emojiName = (String) obj.get("reaction");
-        String messageId = (String) item.get("ts");	
-        String fileId = (String) item.get("file");
-        String fileCommentId = (String) item.get("file_comment");
-        String channelId = (String) item.get("channel");
-        SlackChannel channel = (channelId != null) ? slackSession.findChannelById(channelId) : null;
-        SlackUser user = slackSession.findUserById((String) obj.get("user"));
-        return new ReactionRemovedImpl(emojiName, user, channel, messageId, fileId, fileCommentId);
-    }
-
-    private static PinRemoved extractPinRemovedEvent(SlackSession slackSession, JSONObject obj) {
-        String senderId = (String) obj.get("user");
-        SlackUser sender = slackSession.findUserById(senderId);
-
-        String channelId = (String) obj.get("channel_id");
-	SlackChannel channel = slackSession.findChannelById(channelId);
-
-	JSONObject item = (JSONObject) obj.get("item");
-	String messageType = (String) item.get("type");
-	SlackFile file = null;
-	String message = null;
-	if ("file".equals(messageType)) {
-	  file = new SlackFile();
-	  parseSlackFileFromRaw((JSONObject) item.get("file"), file);
-	} else if ("message".equals(messageType)) {
-	  JSONObject messageObj = (JSONObject) item.get("message");
-	  message = (String) messageObj.get("text");
-	}
-	String timestamp = (String) obj.get("event_ts");
-        return new PinRemovedImpl(sender, channel, timestamp, file, message);
-    }
-
-    private static PinAdded extractPinAddedEvent(SlackSession slackSession, JSONObject obj) {
-        String senderId = (String) obj.get("user");
-        SlackUser sender = slackSession.findUserById(senderId);
-
-        String channelId = (String) obj.get("channel_id");
-	SlackChannel channel = slackSession.findChannelById(channelId);
-
-	JSONObject item = (JSONObject) obj.get("item");
-	String messageType = (String) item.get("type");
-	SlackFile file = null;
-	String message = null;
-	if ("file".equals(messageType)) {
-	  file = new SlackFile();
-	  parseSlackFileFromRaw((JSONObject) item.get("file"), file);
-	} else if ("message".equals(messageType)) {
-	  JSONObject messageObj = (JSONObject) item.get("message");
-	  message = (String) messageObj.get("text");
-	}
-	String timestamp = (String) obj.get("event_ts");
-	
-        return new PinAddedImpl(sender, channel, timestamp, file, message);       
-    }
-
-    private static Map<String, Integer> extractReactionsFromMessageJSON(JSONObject obj) {
-        Map<String, Integer> reacs = new HashMap<>();
-        JSONArray rawReactions = (JSONArray) obj.get("reactions");
-        if (rawReactions != null) {
-            for (int i = 0; i < rawReactions.size(); i++) {
-                JSONObject reaction = (JSONObject) rawReactions.get(i);
-                String emojiCode = reaction.get("name").toString();
-                Integer count = Integer.valueOf(reaction.get("count").toString());
-                reacs.put(emojiCode, count);
-            }
-        }
-        return reacs;
-    }
-
-    public static Map<String, String> extractEmojisFromMessageJSON(JSONObject object) {
-        Map<String, String> emojis = new HashMap<>();
-
-        for (Object o : object.entrySet()) {
-            Map.Entry entry = (Map.Entry) o;
-            emojis.put(entry.getKey().toString(), entry.getValue().toString());
-        }
-
-        return emojis;
-    }
 }
-
-

@@ -1,28 +1,26 @@
 package com.ullink.slack.simpleslackapi.impl;
 
-import java.util.HashMap;
-import java.util.Map;
+import co.carmera.carmeraUtil.Clog;
+
+import com.ullink.slack.simpleslackapi.SlackChannel;
+import com.ullink.slack.simpleslackapi.SlackPersona;
+import com.ullink.slack.simpleslackapi.SlackUser;
+
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import com.ullink.slack.simpleslackapi.SlackChannel;
-import com.ullink.slack.simpleslackapi.SlackPersona;
-import com.ullink.slack.simpleslackapi.SlackTeam;
-import com.ullink.slack.simpleslackapi.SlackUser;
+
+import java.util.HashMap;
+import java.util.Map;
 
 class SlackJSONSessionStatusParser
 {
-    private static final Logger       LOGGER   = LoggerFactory.getLogger(SlackJSONSessionStatusParser.class);
 
     private Map<String, SlackChannel> channels = new HashMap<>();
     private Map<String, SlackUser>    users    = new HashMap<>();
 
-    private SlackPersona              sessionPersona;
-
-    private SlackTeam                 team;
+    private SlackPersona sessionPersona;
 
     private String                    webSocketURL;
 
@@ -57,7 +55,6 @@ class SlackJSONSessionStatusParser
     
     void parse() throws ParseException
     {
-        LOGGER.debug("parsing session status : " + toParse);
         JSONParser parser = new JSONParser();
         JSONObject jsonResponse = (JSONObject) parser.parse(toParse);
         Boolean ok = (Boolean)jsonResponse.get("ok");
@@ -71,7 +68,7 @@ class SlackJSONSessionStatusParser
         {
             JSONObject jsonUser = (JSONObject) jsonObject;
             SlackUser slackUser = SlackJSONParsingUtils.buildSlackUser(jsonUser);
-            LOGGER.debug("slack user found : " + slackUser.getId());
+            Clog.t("Slack","slack user found : " + slackUser.getId());
             users.put(slackUser.getId(), slackUser);
         }
 
@@ -81,7 +78,7 @@ class SlackJSONSessionStatusParser
             {
                 JSONObject jsonBot = (JSONObject) jsonObject;
                 SlackUser slackUser = SlackJSONParsingUtils.buildSlackUser(jsonBot);
-                LOGGER.debug("slack bot found : " + slackUser.getId());
+                Clog.t("Slack","slack bot found : " + slackUser.getId());
                 users.put(slackUser.getId(), slackUser);
             }
         }
@@ -92,7 +89,7 @@ class SlackJSONSessionStatusParser
         {
             JSONObject jsonChannel = (JSONObject) jsonObject;
             SlackChannelImpl channel = SlackJSONParsingUtils.buildSlackChannel(jsonChannel, users);
-            LOGGER.debug("slack public channel found : " + channel.getId());
+            Clog.t("Slack","slack public channel found : " + channel.getId());
             channels.put(channel.getId(), channel);
         }
 
@@ -102,37 +99,19 @@ class SlackJSONSessionStatusParser
         {
             JSONObject jsonChannel = (JSONObject) jsonObject;
             SlackChannelImpl channel = SlackJSONParsingUtils.buildSlackChannel(jsonChannel, users);
-            LOGGER.debug("slack private group found : " + channel.getId());
-            channels.put(channel.getId(), channel);
-        }
-
-        JSONArray imsJson = (JSONArray) jsonResponse.get("ims");
-
-        for (Object jsonObject : imsJson)
-        {
-            JSONObject jsonChannel = (JSONObject) jsonObject;
-            SlackChannelImpl channel = SlackJSONParsingUtils.buildSlackImChannel(jsonChannel, users);
-            LOGGER.debug("slack im channel found : " + channel.getId());
+            Clog.t("Slack","slack private group found : " + channel.getId());
             channels.put(channel.getId(), channel);
         }
 
         JSONObject selfJson = (JSONObject) jsonResponse.get("self");
         sessionPersona = SlackJSONParsingUtils.buildSlackUser(selfJson);
 
-        JSONObject teamJson = (JSONObject) jsonResponse.get("team");
-        team = SlackJSONParsingUtils.buildSlackTeam(teamJson);
 
         webSocketURL = (String) jsonResponse.get("url");
 
     }
 
-    public SlackPersona getSessionPersona()
-    {
+    public SlackPersona getSessionPersona() {
         return sessionPersona;
-    }
-
-    public SlackTeam getTeam()
-    {
-        return team;
     }
 }

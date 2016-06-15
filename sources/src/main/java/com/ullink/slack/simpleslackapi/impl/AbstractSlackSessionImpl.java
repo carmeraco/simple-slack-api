@@ -1,10 +1,28 @@
 package com.ullink.slack.simpleslackapi.impl;
 
-import com.ullink.slack.simpleslackapi.*;
-import com.ullink.slack.simpleslackapi.listeners.*;
-import com.ullink.slack.simpleslackapi.replies.SlackMessageReply;
+import com.ullink.slack.simpleslackapi.SlackAttachment;
+import com.ullink.slack.simpleslackapi.SlackBot;
+import com.ullink.slack.simpleslackapi.SlackChannel;
+import com.ullink.slack.simpleslackapi.SlackMessageHandle;
+import com.ullink.slack.simpleslackapi.SlackPersona;
+import com.ullink.slack.simpleslackapi.SlackSession;
+import com.ullink.slack.simpleslackapi.SlackUser;
+import com.ullink.slack.simpleslackapi.listeners.SlackChannelArchivedListener;
+import com.ullink.slack.simpleslackapi.listeners.SlackChannelCreatedListener;
+import com.ullink.slack.simpleslackapi.listeners.SlackChannelDeletedListener;
+import com.ullink.slack.simpleslackapi.listeners.SlackChannelRenamedListener;
+import com.ullink.slack.simpleslackapi.listeners.SlackChannelUnarchivedListener;
+import com.ullink.slack.simpleslackapi.listeners.SlackConnectedListener;
+import com.ullink.slack.simpleslackapi.listeners.SlackGroupJoinedListener;
+import com.ullink.slack.simpleslackapi.listeners.SlackMessageDeletedListener;
+import com.ullink.slack.simpleslackapi.listeners.SlackMessagePostedListener;
+import com.ullink.slack.simpleslackapi.listeners.SlackMessageUpdatedListener;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 abstract class AbstractSlackSessionImpl implements SlackSession
 {
@@ -12,27 +30,20 @@ abstract class AbstractSlackSessionImpl implements SlackSession
     protected Map<String, SlackChannel>            channels                 = new HashMap<>();
     protected Map<String, SlackUser>               users                    = new HashMap<>();
     protected SlackPersona                         sessionPersona;
-    protected SlackTeam                            team;
 
-    protected List<SlackChannelArchivedListener>   channelArchiveListener   = new ArrayList<>();
-    protected List<SlackChannelCreatedListener>    channelCreateListener    = new ArrayList<>();
-    protected List<SlackChannelDeletedListener>    channelDeleteListener    = new ArrayList<>();
-    protected List<SlackChannelRenamedListener>    channelRenamedListener   = new ArrayList<>();
-    protected List<SlackChannelUnarchivedListener> channelUnarchiveListener = new ArrayList<>();
-    protected List<SlackGroupJoinedListener>       groupJoinedListener      = new ArrayList<>();
-    protected List<SlackMessageDeletedListener>    messageDeletedListener   = new ArrayList<>();
-    protected List<SlackMessagePostedListener>     messagePostedListener    = new ArrayList<>();
-    protected List<SlackMessageUpdatedListener>    messageUpdatedListener   = new ArrayList<>();
-    protected List<SlackConnectedListener>         slackConnectedListener   = new ArrayList<>();
-    protected List<ReactionAddedListener>          reactionAddedListener    = new ArrayList<>();
-    protected List<ReactionRemovedListener>        reactionRemovedListener  = new ArrayList<>();
-    protected List<SlackUserChangeListener>        slackUserChangeListener  = new ArrayList<>();
-    protected List<PinAddedListener>               pinAddedListener         = new ArrayList<>();
-    protected List<PinRemovedListener>             pinRemovedListener       = new ArrayList<>();
-    protected List<SlackDisconnectedListener> slackDisconnectedListener = new ArrayList<>();
+    protected List<SlackChannelArchivedListener>   channelArchiveListener   = new ArrayList<SlackChannelArchivedListener>();
+    protected List<SlackChannelCreatedListener>    channelCreateListener    = new ArrayList<SlackChannelCreatedListener>();
+    protected List<SlackChannelDeletedListener>    channelDeleteListener    = new ArrayList<SlackChannelDeletedListener>();
+    protected List<SlackChannelRenamedListener>    channelRenamedListener   = new ArrayList<SlackChannelRenamedListener>();
+    protected List<SlackChannelUnarchivedListener> channelUnarchiveListener = new ArrayList<SlackChannelUnarchivedListener>();
+    protected List<SlackGroupJoinedListener>       groupJoinedListener      = new ArrayList<SlackGroupJoinedListener>();
+    protected List<SlackMessageDeletedListener>    messageDeletedListener   = new ArrayList<SlackMessageDeletedListener>();
+    protected List<SlackMessagePostedListener>     messagePostedListener    = new ArrayList<SlackMessagePostedListener>();
+    protected List<SlackMessageUpdatedListener>    messageUpdatedListener   = new ArrayList<SlackMessageUpdatedListener>();
+    protected List<SlackReplyListener>             slackReplyListener       = new ArrayList<SlackReplyListener>();
+    protected List<SlackConnectedListener>         slackConnectedListener = new ArrayList<SlackConnectedListener>();
 
     static final SlackChatConfiguration            DEFAULT_CONFIGURATION    = SlackChatConfiguration.getConfiguration().asUser();
-    static final boolean                           DEFAULT_UNFURL           = true;
 
     @Override
     public Collection<SlackChannel> getChannels()
@@ -51,10 +62,8 @@ abstract class AbstractSlackSessionImpl implements SlackSession
     public Collection<SlackBot> getBots()
     {
         ArrayList<SlackBot> toReturn = new ArrayList<>();
-        for (SlackUser user : users.values())
-        {
-            if (user.isBot())
-            {
+        for(SlackUser user : users.values()) {
+            if (user.isBot()) {
                 toReturn.add(user);
             }
         }
@@ -135,54 +144,9 @@ abstract class AbstractSlackSessionImpl implements SlackSession
     }
 
     @Override
-    public SlackMessageHandle<SlackMessageReply> sendMessage(SlackChannel channel, String message, SlackAttachment attachment)
+    public SlackMessageHandle sendMessage(SlackChannel channel, String message, SlackAttachment attachment)
     {
         return sendMessage(channel, message, attachment, DEFAULT_CONFIGURATION);
-    }
-
-    @Override
-    public SlackMessageHandle<SlackMessageReply> sendMessage(SlackChannel channel, String message)
-    {
-        return sendMessage(channel, message, DEFAULT_UNFURL);
-    }
-
-    @Override
-    public SlackMessageHandle<SlackMessageReply> sendMessage(SlackChannel channel, String message, boolean unfurl)
-    {
-        SlackPreparedMessage preparedMessage = new SlackPreparedMessage.Builder()
-                .withMessage(message)
-                .withUnfurl(unfurl)
-                .build();
-        return sendMessage(channel, preparedMessage, DEFAULT_CONFIGURATION);
-    }
-
-    @Override
-    public SlackMessageHandle<SlackMessageReply> sendMessage(SlackChannel channel, String message, SlackAttachment attachment, boolean unfurl)
-    {
-        return sendMessage(channel, message, attachment, DEFAULT_CONFIGURATION, unfurl);
-    }
-
-    @Override
-    public SlackMessageHandle<SlackMessageReply> sendMessage(SlackChannel channel, String message, SlackAttachment attachment, SlackChatConfiguration chatConfiguration)
-    {
-        return sendMessage(channel, message, attachment, chatConfiguration, DEFAULT_UNFURL);
-    }
-
-    @Override
-    public SlackMessageHandle<SlackMessageReply> sendMessage(SlackChannel channel, SlackPreparedMessage preparedMessage) {
-        return sendMessage(channel, preparedMessage, DEFAULT_CONFIGURATION);
-    }
-
-    @Override
-    public SlackMessageHandle<SlackMessageReply> sendMessage(SlackChannel channel, String message, SlackAttachment attachment, SlackChatConfiguration chatConfiguration, boolean unfurl)
-    {
-        SlackPreparedMessage preparedMessage = new SlackPreparedMessage.Builder()
-                .withMessage(message)
-                .withUnfurl(unfurl)
-                .addAttachment(attachment)
-                .build();
-
-        return sendMessage(channel, preparedMessage, chatConfiguration);
     }
 
     @Override
@@ -293,85 +257,17 @@ abstract class AbstractSlackSessionImpl implements SlackSession
         groupJoinedListener.remove(listener);
     }
 
-    @Override
-    public void addSlackConnectedListener(SlackConnectedListener listener)
+    void addSlackReplyListener(SlackReplyListener listener)
     {
-        slackConnectedListener.add(listener);
+        slackReplyListener.add(listener);
     }
 
-    @Override
-    public void removeSlackConnectedListener(SlackConnectedListener listener)
+    void removeSlackReplyListener(SlackReplyListener listener)
     {
-        slackConnectedListener.remove(listener);
+        slackReplyListener.remove(listener);
     }
 
-    @Override
-    public void addSlackDisconnectedListener(SlackDisconnectedListener listener) {
-        slackDisconnectedListener.add(listener);
-    }
-
-    @Override
-    public void removeSlackDisconnectedListener(SlackDisconnectedListener listener) {
-        slackDisconnectedListener.remove(listener);
-    }
-
-    @Override
-    public void addReactionAddedListener(ReactionAddedListener listener)
-    {
-        reactionAddedListener.add(listener);
-    }
-
-    @Override
-    public void removeReactionAddedListener(ReactionAddedListener listener)
-    {
-        reactionAddedListener.remove(listener);
-    }
-
-    @Override
-    public void addReactionRemovedListener(ReactionRemovedListener listener)
-    {
-        reactionRemovedListener.add(listener);
-    }
-
-    @Override
-    public void removeReactionRemovedListener(ReactionRemovedListener listener)
-    {
-        reactionRemovedListener.remove(listener);
-    }
-
-    @Override
-    public void addSlackUserChangeListener(SlackUserChangeListener listener)
-    {
-        slackUserChangeListener.add(listener);
-    }
-
-    @Override
-    public void removeSlackUserChangeListener(SlackUserChangeListener listener)
-    {
-        slackUserChangeListener.remove(listener);
-    }
-
-    public void addPinAddedListener(PinAddedListener listener)
-    {
-        pinAddedListener.add(listener);
-    }
-
-    @Override
-    public void removePinAddedListener(PinAddedListener listener)
-    {
-        pinAddedListener.remove(listener);
-    }
-
-    @Override
-    public void addPinRemovedListener(PinRemovedListener listener)
-    {
-        pinRemovedListener.add(listener);
-    }
-
-    @Override
-    public void removePinRemovedListener(PinRemovedListener listener)
-    {
-        pinRemovedListener.remove(listener);
-    }
+    public void addConnectedListener(SlackConnectedListener listener) { slackConnectedListener.add(listener); }
+    public void removeConnectedListener(SlackConnectedListener listener) { slackConnectedListener.remove(listener); }
 
 }

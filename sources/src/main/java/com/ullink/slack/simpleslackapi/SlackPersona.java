@@ -16,7 +16,4 @@ public interface SlackPersona
     boolean isRestricted();
     boolean isUltraRestricted();
     boolean isBot();
-    String getTimeZone();
-    String getTimeZoneLabel();
-    Integer getTimeZoneOffset();
 }

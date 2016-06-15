@@ -1,6 +1,6 @@
-[![Build Status](https://travis-ci.org/Ullink/simple-slack-api.svg?branch=master)](https://travis-ci.org/Ullink/simple-slack-api)
-[![GitHub release](https://img.shields.io/github/release/Ullink/simple-slack-api.svg)](https://github.com/Ullink/simple-slack-api/releases)
-[![Join the chat at https://gitter.im/Ullink/simple-slack-api](https://badges.gitter.im/Ullink/simple-slack-api.svg)](https://gitter.im/Ullink/simple-slack-api?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+# Fork
+
+This fork uses OkHttp for transport and has been tested with Android.  This may take some work to build, we just included it directly in the repo.
 
 # Simple Slack API
 
